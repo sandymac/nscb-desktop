@@ -8,31 +8,41 @@ Built with Tauri v2 + React + Vite. Powered by [nscb_rust](https://github.com/cx
 
 - Compress NSP/XCI to NSZ/XCZ (zstd level 1-22)
 - Decompress NSZ/XCZ/NCZ back to NSP/XCI
-- Merge base + update + DLC into one NSP/XCI
+- Merge base + update + DLC into one NSP/XCI (with firmware controls: RSV cap, key generation patch)
 - Convert between NSP and XCI
-- Split multi-title files into per-title folders
+- Split multi-title files into per-title folders or individual NSP/XCI files
 - Create/Repack NSP from split folders
+- View file info (content details and metadata summary)
 - Drag & drop file input
 - Live output console + progress tracking
 - Batch support for compress/decompress/convert/split
 - Dark theme UI with SVG iconography and file type badges
-- Auto-download `nscb_rust.exe` from GitHub releases, or import manually
+- Auto-download nscb_rust backend from GitHub releases, or import manually
 - First-launch setup wizard for encryption keys
+- Cross-platform: Windows x86_64, Linux x86_64, macOS ARM64
+
+## Supported Platforms
+
+| Platform | Architecture | Backend Binary |
+|---|---|---|
+| Windows | x86_64 | `nscb_rust.exe` |
+| Linux | x86_64 | `nscb_rust-linux-amd64` |
+| macOS | ARM64 | `nscb_rust-macos-arm64` |
 
 ## Prerequisites
 
-- Windows 10/11
-- WebView2 runtime
 - Switch keys file (`prod.keys` or `keys.txt`)
-- `nscb_rust.exe` backend binary (auto-downloaded or imported via Settings)
+- nscb_rust backend binary (auto-downloaded or imported via Settings)
+- **Windows**: WebView2 runtime (included in Windows 10/11)
+- **Linux**: WebKitGTK 4.1, libayatana-appindicator3
+- **macOS**: macOS 11.0+
 
 ## Usage
 
-1. Run `nscb-desktop.exe` directly (standalone, no install needed), or use the NSIS/MSI installer.
+1. Run the app directly (standalone portable exe), or use the platform installer.
 2. On first launch, the setup wizard prompts you to import **encryption keys** (`prod.keys` or `keys.txt`).
-3. If `nscb_rust.exe` is missing, a banner directs you to **Settings > Tools** where you can download it from GitHub or import manually.
-4. Files are copied to a temporary tools directory (`%TEMP%\nscb-desktop-tools`).
-5. Pick an operation from the sidebar and drop your files.
+3. If the nscb_rust backend is missing, a banner directs you to **Settings > Tools** where you can download it from GitHub or import manually.
+4. Pick an operation from the sidebar and drop your files.
 
 ## Development
 
@@ -47,7 +57,7 @@ npm run dev:vite   # Vite dev server only (no Tauri)
 ## Build
 
 ```bash
-# NSIS installer
+# NSIS installer (Windows) / deb (Linux) / dmg (macOS)
 npm run build
 
 # Portable folder at release/NSCB Desktop/
@@ -59,24 +69,18 @@ npm run dist:portable
 ```text
 nscb-desktop/
 |- ui/                     # Frontend (React + TypeScript)
-|  |- App.tsx              # All components + pages (config-driven)
+|  |- App.tsx              # All components + pages
 |  |- App.css              # Dark theme design system
 |  |- main.tsx             # Entry point
 |  `- lib/
 |     |- api.ts            # Tauri plugin wrappers
-|     `- nscb-runner.ts     # Sidecar process + progress parsing
+|     `- nscb-runner.ts    # Backend process + progress parsing
 |- src-tauri/              # Tauri v2 / Rust backend
 |  |- src/lib.rs           # Commands: run_nscb, import_keys, etc.
-|  |- tauri.conf.json      # Window config, sidecar, bundling
+|  |- tauri.conf.json      # Window config, bundling
 |  `- capabilities/        # Security permissions
 `- scripts/portable.mjs    # Portable folder assembly
 ```
-
-## Notes
-
-- Operation pages are config-driven via a generic `OperationPage` component — adding a new operation only requires a config object.
-- Backend and key files are imported at runtime into `%TEMP%\nscb-desktop-tools`.
-- The app uses native window decorations (no custom titlebar).
 
 ## License
 

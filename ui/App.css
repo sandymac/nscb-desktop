@@ -27,6 +27,8 @@
   --color-convert: #f0883e;
   --color-split: #f778ba;
   --color-create: #58a6ff;
+  --color-dspl: #e0758a;
+  --color-info: #79c0ff;
   --color-settings: #8b949e;
 
   /* Text colors */
@@ -270,7 +272,9 @@ body {
 .page-icon.accent-merge { background: rgba(210, 168, 255, 0.12); color: var(--color-merge); }
 .page-icon.accent-convert { background: rgba(240, 136, 62, 0.12); color: var(--color-convert); }
 .page-icon.accent-split { background: rgba(247, 120, 186, 0.12); color: var(--color-split); }
+.page-icon.accent-dspl { background: rgba(224, 117, 138, 0.12); color: var(--color-dspl); }
 .page-icon.accent-create { background: rgba(88, 166, 255, 0.12); color: var(--color-create); }
+.page-icon.accent-info { background: rgba(121, 192, 255, 0.12); color: var(--color-info); }
 .page-icon.accent-settings { background: rgba(139, 148, 158, 0.12); color: var(--color-settings); }
 
 .page-header h2 {

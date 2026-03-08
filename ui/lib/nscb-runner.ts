@@ -34,7 +34,7 @@ class Emitter {
     }
 }
 
-const SINGLE_FILE_OPS = new Set(['compress', 'decompress', 'convert', 'split']);
+const SINGLE_FILE_OPS = new Set(['compress', 'decompress', 'convert', 'split', 'dspl', 'info']);
 
 type StdoutPayload = { op: string; line: string };
 type StderrPayload = { op: string; chunk: string };
@@ -149,6 +149,9 @@ export class NscbRunner extends Emitter {
                 args.push('-d', ...files);
                 if (options.format) args.push('-t', options.format);
                 if (options.nodelta) args.push('-n');
+                if (options.pv) args.push('--pv');
+                if (options.rsvcap) args.push('--RSVcap', String(options.rsvcap));
+                if (options.keypatch) args.push('-k', String(options.keypatch));
                 break;
             case 'convert':
                 args.push('-c', ...files);
@@ -156,6 +159,17 @@ export class NscbRunner extends Emitter {
                 break;
             case 'split':
                 args.push('--splitter', ...files);
+                break;
+            case 'dspl':
+                args.push('--dspl', ...files);
+                if (options.format) args.push('-t', options.format);
+                break;
+            case 'info':
+                if (options.mode === 'filelist') {
+                    args.push('--ADVfilelist', ...files);
+                } else {
+                    args.push('--ADVcontentlist', ...files);
+                }
                 break;
             case 'create': {
                 const folderName = this.getBasename(files[0]);
@@ -166,7 +180,7 @@ export class NscbRunner extends Emitter {
             }
         }
 
-        if (operation !== 'create') {
+        if (operation !== 'create' && operation !== 'info') {
             if (options.output) {
                 args.push('-o', options.output);
             } else if (files.length > 0) {

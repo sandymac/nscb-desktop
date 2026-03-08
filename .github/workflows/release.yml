@@ -10,7 +10,21 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            label: windows
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            label: linux
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            label: macos
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
@@ -25,27 +39,55 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-pc-windows-msvc
+          targets: ${{ matrix.target }}
 
-      - name: Setup MSVC (link.exe)
+      - name: Install dependencies (Linux)
+        if: matrix.label == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Setup MSVC (Windows)
+        if: matrix.label == 'windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Install dependencies
+      - name: Install npm dependencies
         run: npm ci
 
-      - name: Build Tauri bundles
+      - name: Build Tauri app
         run: npm run build
 
-      - name: Build portable folder
+      - name: Assemble portable folder
         run: node scripts/portable.mjs
 
-      - name: Create Release
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nscb-desktop-${{ matrix.label }}
+          path: release/
+          retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create ${{ github.ref_name }} `
-            --title "Release ${{ github.ref_name }}" `
-            --generate-notes `
-            src-tauri/target/release/bundle/nsis/*-setup.exe `
-            src-tauri/target/release/bundle/msi/*.msi `
-            "release/NSCB Desktop/nscb-desktop.exe"
+          gh release create "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --title "Release ${{ github.ref_name }}" \
+            --generate-notes \
+            --draft \
+            artifacts/**/*

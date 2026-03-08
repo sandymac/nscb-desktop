@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { getVersion } from '@tauri-apps/api/app';
 import * as api from './lib/api';
 import { getRunner } from './lib/nscb-runner';
 
@@ -21,6 +22,7 @@ const Icons = {
     merge: icon(20, <><circle cx="18" cy="18" r="3" /><circle cx="6" cy="6" r="3" /><path d="M6 21V9a9 9 0 0 0 9 9" /><path d="M6 9a9 9 0 0 1 9-9" /></>),
     convert: icon(20, <><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></>),
     split: icon(20, <><path d="M16 3h5v5" /><path d="M8 3H3v5" /><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3" /><path d="m15 9 6-6" /></>),
+    dspl: icon(20, <><path d="M16 3h5v5" /><path d="M8 3H3v5" /><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3" /><path d="m15 9 6-6" /><circle cx="18" cy="18" r="3" /></>),
     create: icon(20, <><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></>),
     settings: icon(20, <><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></>),
     upload: icon(40, <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></>, 1.5),
@@ -165,18 +167,20 @@ const NAV_PAGES = [
     { id: 'merge', icon: Icons.merge, label: 'Merge' },
     { id: 'convert', icon: Icons.convert, label: 'Convert' },
     { id: 'split', icon: Icons.split, label: 'Split' },
+    { id: 'dspl', icon: Icons.dspl, label: 'Split to Files' },
     { id: 'create', icon: Icons.create, label: 'Create/Repack' },
+    { id: 'info', icon: Icons.info, label: 'Info' },
     { id: 'settings', icon: Icons.settings, label: 'Settings' },
 ];
 
-function Sidebar({ activePage, onNavigate }: { activePage: string; onNavigate: (id: string) => void }) {
+function Sidebar({ activePage, onNavigate, appVersion }: { activePage: string; onNavigate: (id: string) => void; appVersion: string }) {
     return (
         <div className="sidebar">
             <div className="sidebar-brand">
                 <div className="brand-logo">{Icons.switchLogo}</div>
                 <div className="brand-text">
                     <h1>NSCB Desktop</h1>
-                    <span>v1.0.0</span>
+                    <span>v{appVersion}</span>
                 </div>
             </div>
             <nav className="sidebar-nav">
@@ -602,49 +606,7 @@ const DECOMPRESS_CONFIG: OperationPageConfig = {
     startMessage: 'Starting decompression...',
 };
 
-const MERGE_CONFIG: OperationPageConfig = {
-    op: 'merge',
-    icon: Icons.merge,
-    accent: 'merge',
-    title: 'Merge',
-    subtitle: 'Combine base game + updates + DLCs into a single file',
-    accept: ['xci', 'nsp', 'nsz', 'xcz'],
-    hint: 'Drop base game, update, and DLC files',
-    startLabel: 'Start Merge',
-    startMessage: 'Starting merge...',
-    minFiles: 2,
-    renderOptions: (state) => {
-        const format = state.options.format ?? 'xci';
-        const nodelta = state.options.nodelta ?? false;
-        return (
-            <div className="card">
-                <div className="card-header">
-                    <span className="card-title">Merge Options</span>
-                </div>
-                <div className="options-panel">
-                    <div className="option-group">
-                        <label className="option-label">Output Format</label>
-                        <select value={format} onChange={(e) => state.setOption('format', e.target.value)}>
-                            <option value="xci">XCI (Game Cartridge)</option>
-                            <option value="nsp">NSP (eShop Package)</option>
-                        </select>
-                        <span className="option-description">
-                            {format === 'xci' ? 'Single XCI with all content' : 'Single NSP with all content'}
-                        </span>
-                    </div>
-                    <div className="option-group">
-                        <Toggle checked={nodelta} onChange={(v) => state.setOption('nodelta', v)} label="Exclude Delta Fragments" />
-                        <span className="option-description">Skip delta NCA fragments during merge</span>
-                    </div>
-                </div>
-            </div>
-        );
-    },
-    buildRunnerOpts: (state) => ({
-        format: state.options.format ?? 'xci',
-        nodelta: (state.options.nodelta ?? false) || undefined,
-    }),
-};
+// Merge page is a custom component (not config-driven) — see MergePage below.
 
 const CONVERT_CONFIG: OperationPageConfig = {
     op: 'convert',
@@ -681,11 +643,253 @@ const SPLIT_CONFIG: OperationPageConfig = {
     startMessage: 'Starting split...',
 };
 
+const DSPL_CONFIG: OperationPageConfig = {
+    op: 'dspl',
+    icon: Icons.dspl,
+    accent: 'dspl',
+    title: 'Split to Files',
+    subtitle: 'Split multi-title files into individual NSP/XCI files',
+    accept: ['nsp', 'xci'],
+    hint: 'Drop NSP or XCI files to split into individual titles',
+    startLabel: 'Start Split',
+    startMessage: 'Starting split to files...',
+    renderOptions: (state) => (
+        <FormatOptions
+            options={state.options}
+            setOption={state.setOption}
+            title="Split Options"
+            descriptions={{ xci: 'Output individual XCI files', nsp: 'Output individual NSP files' }}
+        />
+    ),
+    buildRunnerOpts: (state) => ({
+        format: state.options.format ?? 'xci',
+    }),
+};
+
 function CompressPage() { return <OperationPage config={COMPRESS_CONFIG} />; }
 function DecompressPage() { return <OperationPage config={DECOMPRESS_CONFIG} />; }
-function MergePage() { return <OperationPage config={MERGE_CONFIG} />; }
+function MergePage() {
+    const { files: baseFiles, addFiles: addBaseFiles, removeFile: removeBaseFile, clearFiles: clearBaseFiles } = useFileList();
+    const { files: extraFiles, addFiles: addExtraFiles, removeFile: removeExtraFile, clearFiles: clearExtraFiles } = useFileList();
+    const { running, progress, outputLines, setRunning, setProgress, setOutputLines } = useRunnerEvents('merge');
+    const { outputDir, setOutputDir, selectOutputDir } = useOutputDir();
+    const [format, setFormat] = useState('xci');
+    const [nodelta, setNodelta] = useState(false);
+    const [pv, setPv] = useState(false);
+    const [rsvcap, setRsvcap] = useState('');
+    const [keypatch, setKeypatch] = useState('');
+
+    // Output dir defaults to base game's directory
+    useEffect(() => {
+        setOutputDir(baseFiles.length > 0 ? getDirectory(baseFiles[0]) : '');
+    }, [baseFiles]);
+
+    const allFiles = [...baseFiles, ...extraFiles];
+    const canStart = baseFiles.length >= 1 && extraFiles.length >= 1;
+
+    const handleStart = async () => {
+        if (!canStart) return;
+        setRunning(true);
+        setProgress({ ...EMPTY_PROGRESS, message: 'Starting merge...' });
+        setOutputLines([]);
+        await runner.run('merge', allFiles, {
+            output: outputDir || undefined,
+            format,
+            nodelta: nodelta || undefined,
+            pv: pv || undefined,
+            rsvcap: rsvcap || undefined,
+            keypatch: keypatch || undefined,
+        });
+    };
+
+    const handleCancel = async () => {
+        await runner.cancel();
+        setRunning(false);
+        setProgress({ ...EMPTY_PROGRESS, message: 'Cancelled' });
+    };
+
+    const handleClear = () => {
+        clearBaseFiles();
+        clearExtraFiles();
+        setOutputLines([]);
+        setProgress(EMPTY_PROGRESS);
+    };
+
+    return (
+        <div className="page">
+            <div className="page-header">
+                <div className="page-icon accent-merge">{Icons.merge}</div>
+                <div>
+                    <h2>Merge</h2>
+                    <p>Combine base game + updates + DLCs into a single file</p>
+                </div>
+            </div>
+
+            <div className="card">
+                <div className="card-header">
+                    <span className="card-title">Base Game</span>
+                </div>
+                <div style={{ padding: '12px' }}>
+                    <DropZone onFiles={addBaseFiles} accept={['xci', 'nsp', 'nsz', 'xcz']} hint="Drop the base game file" />
+                    <FileList files={baseFiles} onRemove={removeBaseFile} />
+                </div>
+            </div>
+
+            <div className="card">
+                <div className="card-header">
+                    <span className="card-title">Updates / DLCs</span>
+                </div>
+                <div style={{ padding: '12px' }}>
+                    <DropZone onFiles={addExtraFiles} accept={['xci', 'nsp', 'nsz', 'xcz']} hint="Drop update and DLC files" />
+                    <FileList files={extraFiles} onRemove={removeExtraFile} />
+                </div>
+            </div>
+
+            {allFiles.length > 0 && (
+                <>
+                    <div className="card">
+                        <div className="card-header">
+                            <span className="card-title">Merge Options</span>
+                        </div>
+                        <div className="options-panel">
+                            <div className="option-group">
+                                <label className="option-label">Output Format</label>
+                                <select value={format} onChange={(e) => setFormat(e.target.value)}>
+                                    <option value="xci">XCI (Game Cartridge)</option>
+                                    <option value="nsp">NSP (eShop Package)</option>
+                                </select>
+                                <span className="option-description">
+                                    {format === 'xci' ? 'Single XCI with all content' : 'Single NSP with all content'}
+                                </span>
+                            </div>
+                            <div className="option-group">
+                                <Toggle checked={nodelta} onChange={setNodelta} label="Exclude Delta Fragments" />
+                                <span className="option-description">Skip delta NCA fragments during merge</span>
+                            </div>
+                            <div className="option-group">
+                                <Toggle checked={pv} onChange={setPv} label="Show Firmware Info" />
+                                <span className="option-description">Print before/after firmware version info during merge</span>
+                            </div>
+                            <div className="option-group">
+                                <label className="option-label">RSV Cap</label>
+                                <input
+                                    type="text"
+                                    value={rsvcap}
+                                    onChange={(e) => setRsvcap(e.target.value)}
+                                    placeholder="Optional — caps RequiredSystemVersion"
+                                />
+                                <span className="option-description">Cap the RequiredSystemVersion to a specific value</span>
+                            </div>
+                            <div className="option-group">
+                                <label className="option-label">Key Generation Patch</label>
+                                <input
+                                    type="text"
+                                    value={keypatch}
+                                    onChange={(e) => setKeypatch(e.target.value)}
+                                    placeholder="Optional — lowers NCA key generation"
+                                />
+                                <span className="option-description">Lower NCA key generation to a specific value</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <OutputDirPicker outputDir={outputDir} setOutputDir={setOutputDir} selectOutputDir={selectOutputDir} />
+
+                    {(running || outputLines.length > 0) && (
+                        <ProgressDisplay progress={progress} outputLines={outputLines} />
+                    )}
+
+                    <ActionBar
+                        running={running}
+                        onCancel={handleCancel}
+                        onClear={handleClear}
+                        onStart={handleStart}
+                        startLabel="Start Merge"
+                        startDisabled={!canStart}
+                    />
+                </>
+            )}
+        </div>
+    );
+}
 function ConvertPage() { return <OperationPage config={CONVERT_CONFIG} />; }
 function SplitPage() { return <OperationPage config={SPLIT_CONFIG} />; }
+function DsplPage() { return <OperationPage config={DSPL_CONFIG} />; }
+
+function InfoPage() {
+    const { files, addFiles, removeFile, clearFiles } = useFileList();
+    const { running, progress, outputLines, setRunning, setProgress, setOutputLines } = useRunnerEvents('info');
+    const [mode, setMode] = useState<'contentlist' | 'filelist'>('contentlist');
+
+    const handleStart = async () => {
+        if (files.length === 0) return;
+        setRunning(true);
+        setProgress({ ...EMPTY_PROGRESS, message: 'Fetching info...' });
+        setOutputLines([]);
+        await runner.run('info', files, { mode });
+    };
+
+    const handleCancel = async () => {
+        await runner.cancel();
+        setRunning(false);
+        setProgress({ ...EMPTY_PROGRESS, message: 'Cancelled' });
+    };
+
+    const handleClear = () => {
+        clearFiles();
+        setOutputLines([]);
+        setProgress(EMPTY_PROGRESS);
+    };
+
+    return (
+        <div className="page">
+            <div className="page-header">
+                <div className="page-icon accent-info">{Icons.info}</div>
+                <div>
+                    <h2>Info</h2>
+                    <p>View content details or metadata summary of NSP/XCI files</p>
+                </div>
+            </div>
+
+            <DropZone onFiles={addFiles} accept={['nsp', 'xci', 'nsz', 'xcz']} hint="Drop NSP, XCI, NSZ, or XCZ files to inspect" />
+            <FileList files={files} onRemove={removeFile} />
+
+            {files.length > 0 && (
+                <>
+                    <div className="card">
+                        <div className="card-header">
+                            <span className="card-title">Info Mode</span>
+                        </div>
+                        <div className="options-panel">
+                            <div className="option-group">
+                                <label className="option-label">Output Type</label>
+                                <select value={mode} onChange={(e) => setMode(e.target.value as 'contentlist' | 'filelist')}>
+                                    <option value="contentlist">Content Details</option>
+                                    <option value="filelist">Metadata Summary</option>
+                                </select>
+                                <span className="option-description">
+                                    {mode === 'contentlist' ? 'Detailed content listing with title IDs and versions' : 'File-level metadata summary'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {(running || outputLines.length > 0) && (
+                        <ProgressDisplay progress={progress} outputLines={outputLines} />
+                    )}
+
+                    <ActionBar
+                        running={running}
+                        onCancel={handleCancel}
+                        onClear={handleClear}
+                        onStart={handleStart}
+                        startLabel="Get Info"
+                    />
+                </>
+            )}
+        </div>
+    );
+}
 
 function CreatePage() {
     const { running, progress, outputLines, setRunning, setProgress, setOutputLines } = useRunnerEvents('create');
@@ -847,7 +1051,7 @@ function SettingsPage({ onBackendChanged }: { onBackendChanged?: () => void }) {
 
                     <div className="settings-row">
                         <div className="settings-row-label">
-                            <h4>Backend Binary (nscb_rust.exe)</h4>
+                            <h4>Backend Binary (nscb_rust)</h4>
                             <p>{backendVersion ? `Installed: ${backendVersion}` : 'Unknown version (manually imported)'}</p>
                         </div>
                         <div className="settings-row-control">
@@ -892,8 +1096,10 @@ function SettingsPage({ onBackendChanged }: { onBackendChanged?: () => void }) {
 
 function SetupPage({
     onComplete,
+    appVersion,
 }: {
     onComplete: () => void;
+    appVersion: string;
 }) {
     const [error, setError] = useState('');
     const [checking, setChecking] = useState(false);
@@ -948,7 +1154,7 @@ function SetupPage({
                 )}
 
                 <div className="setup-footer">
-                    NSCB Desktop v1.0.0
+                    NSCB Desktop v{appVersion}
                 </div>
             </div>
         </div>
@@ -959,7 +1165,7 @@ function MissingBackendBanner({ onGoToSettings }: { onGoToSettings: () => void }
     return (
         <div className="missing-backend-banner">
             {Icons.alertCircle}
-            <span><strong>nscb_rust.exe</strong> is missing. Go to Settings &gt; Tools to download or import it.</span>
+            <span><strong>nscb_rust backend</strong> is missing. Go to Settings &gt; Tools to download or import it.</span>
             <button className="btn btn-secondary btn-sm" onClick={onGoToSettings}>
                 Open Settings
             </button>
@@ -977,7 +1183,9 @@ const PAGES: Record<string, React.FC> = {
     merge: MergePage,
     convert: ConvertPage,
     split: SplitPage,
+    dspl: DsplPage,
     create: CreatePage,
+    info: InfoPage,
 };
 
 async function checkSetupState() {
@@ -996,6 +1204,7 @@ export default function App() {
     const [hasKeysState, setHasKeys] = useState(false);
     const [hasBackendState, setHasBackend] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [appVersion, setAppVersion] = useState('0.0.0');
 
     function applySetupState(state: { dir: string | null; keys: boolean; backend: boolean }) {
         setToolsDir(state.dir);
@@ -1006,6 +1215,7 @@ export default function App() {
     useEffect(() => {
         (async () => {
             await runner.init();
+            getVersion().then(setAppVersion).catch(() => {});
             applySetupState(await checkSetupState());
             setLoading(false);
         })();
@@ -1052,7 +1262,7 @@ export default function App() {
     if (!toolsDir || !hasKeysState) {
         return (
             <>
-                <SetupPage onComplete={handleSetupComplete} />
+                <SetupPage onComplete={handleSetupComplete} appVersion={appVersion} />
                 <ToastContainer toasts={toasts} />
             </>
         );
@@ -1060,7 +1270,7 @@ export default function App() {
 
     return (
         <div className="app-shell">
-            <Sidebar activePage={activePage} onNavigate={setActivePage} />
+            <Sidebar activePage={activePage} onNavigate={setActivePage} appVersion={appVersion} />
             <main className="main-content">
                 {!hasBackendState && (
                     <MissingBackendBanner onGoToSettings={() => setActivePage('settings')} />

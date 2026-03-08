@@ -61,10 +61,9 @@ export async function importKeys(): Promise<{ ok: boolean; error?: string }> {
 
 export async function importBackend(): Promise<{ ok: boolean; error?: string }> {
     const selected = await open({
-        title: 'Select nscb_rust.exe',
+        title: 'Select nscb_rust backend binary',
         multiple: false,
         filters: [
-            { name: 'Executable', extensions: ['exe'] },
             { name: 'All Files', extensions: ['*'] },
         ],
     });
@@ -75,7 +74,7 @@ export async function importBackend(): Promise<{ ok: boolean; error?: string }> 
         await invoke('import_nscb_binary', { srcPath: srcFile });
         return { ok: true };
     } catch (e: any) {
-        return { ok: false, error: `Failed to copy nscb_rust.exe: ${e.message || e}` };
+        return { ok: false, error: `Failed to import backend: ${e.message || e}` };
     }
 }
 
@@ -115,15 +114,30 @@ export interface ReleaseInfo {
     downloadUrl: string;
 }
 
+export async function getPlatform(): Promise<string> {
+    try {
+        return await invoke<string>('get_platform');
+    } catch {
+        return 'windows';
+    }
+}
+
 export async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
     try {
+        const platform = await getPlatform();
         const res = await fetch('https://api.github.com/repos/cxfcxf/nscb_rust/releases/latest');
         if (!res.ok) return null;
         const data = await res.json();
         const tag: string = data.tag_name ?? '';
-        const asset = (data.assets as any[])?.find(
-            (a: any) => typeof a.name === 'string' && a.name.endsWith('.exe'),
-        );
+        const assets = data.assets as any[];
+        let asset: any;
+        if (platform === 'macos') {
+            asset = assets?.find((a: any) => typeof a.name === 'string' && a.name.includes('macos-arm64'));
+        } else if (platform === 'linux') {
+            asset = assets?.find((a: any) => typeof a.name === 'string' && a.name.includes('linux-amd64'));
+        } else {
+            asset = assets?.find((a: any) => typeof a.name === 'string' && a.name.endsWith('.exe'));
+        }
         if (!asset?.browser_download_url) return null;
         return { tag, downloadUrl: asset.browser_download_url };
     } catch {

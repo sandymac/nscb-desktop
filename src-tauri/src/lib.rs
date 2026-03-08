@@ -10,6 +10,16 @@ use tauri::Emitter;
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
+fn nscb_binary_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "nscb_rust.exe"
+    } else if cfg!(target_os = "macos") {
+        "nscb_rust-macos-arm64"
+    } else {
+        "nscb_rust-linux-amd64"
+    }
+}
+
 fn app_root_dir() -> Result<std::path::PathBuf, String> {
     #[cfg(debug_assertions)]
     {
@@ -44,9 +54,10 @@ fn app_tools_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
 
 fn nscb_exe_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     let tools_dir = app_tools_dir(app)?;
-    let exe_path = tools_dir.join("nscb_rust.exe");
+    let name = nscb_binary_name();
+    let exe_path = tools_dir.join(name);
     if !exe_path.exists() {
-        return Err(format!("nscb_rust.exe not found at {}", exe_path.display()));
+        return Err(format!("{} not found at {}", name, exe_path.display()));
     }
     Ok(exe_path)
 }
@@ -98,7 +109,7 @@ fn has_keys(app: tauri::AppHandle) -> Result<bool, String> {
 #[tauri::command]
 fn has_backend(app: tauri::AppHandle) -> Result<bool, String> {
     let tools_dir = app_tools_dir(&app)?;
-    Ok(tools_dir.join("nscb_rust.exe").exists())
+    Ok(tools_dir.join(nscb_binary_name()).exists())
 }
 
 #[tauri::command]
@@ -112,13 +123,20 @@ fn import_nscb_binary(app: tauri::AppHandle, src_path: String) -> Result<(), Str
         .and_then(|n| n.to_str())
         .unwrap_or_default()
         .to_ascii_lowercase();
-    if filename != "nscb_rust.exe" && filename != "nscb_rust-x86_64-pc-windows-msvc.exe" {
-        return Err("Please select nscb_rust.exe (or nscb_rust-x86_64-pc-windows-msvc.exe)".to_string());
+    if !filename.starts_with("nscb_rust") {
+        return Err("Please select an nscb_rust backend binary".to_string());
     }
 
     let tools_dir = app_tools_dir(&app)?;
-    let dst = tools_dir.join("nscb_rust.exe");
-    std::fs::copy(src, &dst).map_err(|e| format!("Failed to copy nscb_rust.exe: {e}"))?;
+    let dst = tools_dir.join(nscb_binary_name());
+    std::fs::copy(src, &dst).map_err(|e| format!("Failed to copy backend binary: {e}"))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&dst, std::fs::Permissions::from_mode(0o755)).ok();
+    }
+
     Ok(())
 }
 
@@ -144,7 +162,7 @@ fn run_nscb(app: tauri::AppHandle, operation: String, args: Vec<String>) -> Resu
         #[cfg(target_os = "windows")]
         cmd.creation_flags(CREATE_NO_WINDOW);
         let mut child = cmd.spawn()
-            .map_err(|e| format!("Failed to start nscb_rust.exe: {e}"))?;
+            .map_err(|e| format!("Failed to start {}: {e}", nscb_binary_name()))?;
 
         *lock = Some(child.id());
 
@@ -253,7 +271,7 @@ fn save_backend_version(app: tauri::AppHandle, version: String) -> Result<(), St
 #[tauri::command]
 fn download_backend(app: tauri::AppHandle, url: String) -> Result<(), String> {
     let tools_dir = app_tools_dir(&app)?;
-    let dst = tools_dir.join("nscb_rust.exe");
+    let dst = tools_dir.join(nscb_binary_name());
 
     let response = reqwest::blocking::get(&url)
         .map_err(|e| format!("Download failed: {e}"))?;
@@ -264,7 +282,14 @@ fn download_backend(app: tauri::AppHandle, url: String) -> Result<(), String> {
         .bytes()
         .map_err(|e| format!("Failed to read response body: {e}"))?;
     std::fs::write(&dst, &bytes)
-        .map_err(|e| format!("Failed to save nscb_rust.exe: {e}"))?;
+        .map_err(|e| format!("Failed to save backend binary: {e}"))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&dst, std::fs::Permissions::from_mode(0o755)).ok();
+    }
+
     Ok(())
 }
 
@@ -291,9 +316,24 @@ fn cancel_nscb() -> Result<(), String> {
                 return Err("Failed to stop running process".to_string());
             }
         }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            Command::new("kill")
+                .args(["-9", &pid.to_string()])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .map_err(|e| format!("Failed to stop process: {e}"))?;
+        }
     }
 
     Ok(())
+}
+
+#[tauri::command]
+fn get_platform() -> String {
+    std::env::consts::OS.to_string()
 }
 
 pub fn run() {
@@ -312,7 +352,8 @@ pub fn run() {
             save_backend_version,
             download_backend,
             run_nscb,
-            cancel_nscb
+            cancel_nscb,
+            get_platform
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
