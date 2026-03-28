@@ -42,7 +42,12 @@
     },
     "fs:allow-read-dir",
     "fs:allow-rename",
-    "opener:allow-open-url",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "https://github.com/cxfcxf/**" }
+      ]
+    },
     "core:window:allow-set-title"
   ]
 }

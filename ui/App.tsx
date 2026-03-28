@@ -194,14 +194,14 @@ const NAV_PAGES = [
     { id: 'settings', icon: Icons.settings, label: 'Settings' },
 ];
 
-function Sidebar({ activePage, onNavigate, appVersion }: { activePage: string; onNavigate: (id: string) => void; appVersion: string }) {
+function Sidebar({ activePage, onNavigate, appVersion, appUpdate }: { activePage: string; onNavigate: (id: string) => void; appVersion: string; appUpdate?: { tag: string; url: string } | null }) {
     return (
         <div className="sidebar">
             <div className="sidebar-brand">
                 <div className="brand-logo">{Icons.switchLogo}</div>
                 <div className="brand-text">
                     <h1>NSCB Desktop</h1>
-                    <span>v{appVersion}</span>
+                    <span>v{appVersion}{appUpdate && <>{' | '}<button className="update-link" onClick={() => api.openExternal(appUpdate.url)}>{appUpdate.tag} available</button></>}</span>
                 </div>
             </div>
             <nav className="sidebar-nav">
@@ -1807,6 +1807,7 @@ export default function App() {
     const [hasBackendState, setHasBackend] = useState(false);
     const [loading, setLoading] = useState(true);
     const [appVersion, setAppVersion] = useState('0.0.0');
+    const [appUpdate, setAppUpdate] = useState<{ tag: string; url: string } | null>(null);
 
     function applySetupState(state: { dir: string | null; keys: boolean; backend: boolean }) {
         setToolsDir(state.dir);
@@ -1817,9 +1818,15 @@ export default function App() {
     useEffect(() => {
         (async () => {
             await runner.init();
-            getVersion().then(setAppVersion).catch(() => {});
+            const ver = await getVersion().catch(() => '0.0.0');
+            setAppVersion(ver);
             applySetupState(await checkSetupState());
             setLoading(false);
+            api.fetchLatestAppRelease().then(release => {
+                if (release && release.tag.replace(/^v/, '') !== ver) {
+                    setAppUpdate(release);
+                }
+            });
         })();
     }, []);
 
@@ -1872,7 +1879,7 @@ export default function App() {
 
     return (
         <div className="app-shell">
-            <Sidebar activePage={activePage} onNavigate={setActivePage} appVersion={appVersion} />
+            <Sidebar activePage={activePage} onNavigate={setActivePage} appVersion={appVersion} appUpdate={appUpdate} />
             <main className="main-content">
                 {!hasBackendState && (
                     <MissingBackendBanner onGoToSettings={() => setActivePage('settings')} />

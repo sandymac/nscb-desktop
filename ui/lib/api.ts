@@ -160,6 +160,25 @@ export async function saveInstalledVersion(tag: string): Promise<void> {
     await invoke('save_backend_version', { version: tag });
 }
 
+export interface AppReleaseInfo {
+    tag: string;
+    url: string;
+}
+
+export async function fetchLatestAppRelease(): Promise<AppReleaseInfo | null> {
+    try {
+        const res = await fetch('https://api.github.com/repos/cxfcxf/nscb-desktop/releases/latest');
+        if (!res.ok) return null;
+        const data = await res.json();
+        const tag: string = data.tag_name ?? '';
+        const url: string = data.html_url ?? '';
+        if (!tag) return null;
+        return { tag, url };
+    } catch {
+        return null;
+    }
+}
+
 export async function getSetting(key: string): Promise<string> {
     try {
         return await invoke<string>('get_setting', { key });

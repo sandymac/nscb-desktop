@@ -55,6 +55,19 @@ jobs:
         if: matrix.label == 'windows'
         uses: ilammy/msvc-dev-cmd@v1
 
+      - name: Sync version from git tag
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Setting version to $VERSION"
+          node -e "
+            const fs = require('fs');
+            for (const f of ['package.json', 'src-tauri/tauri.conf.json']) {
+              const s = fs.readFileSync(f, 'utf8');
+              fs.writeFileSync(f, s.replace(/\"version\": \"[^\"]*\"/, '\"version\": \"'+'$VERSION'+'\"'));
+            }
+          "
+
       - name: Install npm dependencies
         run: npm ci
 
