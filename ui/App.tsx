@@ -248,7 +248,15 @@ function DropZone({ onFiles, accept, hint, allowFolders }: { onFiles: (files: st
                 setDragOver(false);
             } else if (event.payload.type === 'drop') {
                 setDragOver(false);
-                const paths = event.payload.paths;
+                let paths = event.payload.paths;
+                if (!allowFolders && accept) {
+                    const extSet = new Set(accept.map(e => e.toLowerCase()));
+                    paths = paths.filter(p => {
+                        const name = p.replace(/\\/g, '/').split('/').pop() || '';
+                        const dot = name.lastIndexOf('.');
+                        return dot >= 0 && extSet.has(name.substring(dot + 1).toLowerCase());
+                    });
+                }
                 if (paths && paths.length > 0) {
                     onFiles(paths);
                 }
