@@ -1489,6 +1489,48 @@ function VerifyPage() {
     );
 }
 
+// Parsed representation of an nscb_rust merge output filename.
+// Format: "GameName [TitleID] [vVersion] (Summary).ext"
+// Example: "Bayonetta 2 [0100847008600000] [v131072] (1G+1U+3D).nsp"
+interface ParsedMergeOutput {
+    filename: string;
+    gameName: string;
+    titleId: string;   // uppercase 16-hex
+    version: string;
+}
+
+function parseMergeOutputFilename(filename: string): ParsedMergeOutput | null {
+    const lastDot = filename.lastIndexOf('.');
+    if (lastDot === -1) return null;
+    const base = filename.substring(0, lastDot);
+    const m = base.match(/^(.+?)\s+\[([0-9A-Fa-f]{16})\]\s+\[v(\d+)\](?:\s+\([^)]+\))?$/i);
+    if (!m) return null;
+    return {
+        filename,
+        gameName: m[1],
+        titleId: m[2].toUpperCase(),
+        version: m[3],
+    };
+}
+
+// Extract the base title ID (ends in 000) from a list of input file paths.
+// Falls back to deriving from an update TID (ends in 800) if no base is found.
+function extractBaseTitleId(filePaths: string[]): string | null {
+    const tidRe = /[\[-]([0-9A-Fa-f]{16})[\]-]/gi;
+    const tids: string[] = [];
+    for (const fp of filePaths) {
+        const fname = fp.replace(/\\/g, '/').split('/').pop() ?? '';
+        for (const m of fname.matchAll(tidRe)) {
+            tids.push(m[1].toUpperCase());
+        }
+    }
+    const baseTid = tids.find(t => t.endsWith('000'));
+    if (baseTid) return baseTid;
+    const updTid = tids.find(t => t.endsWith('800'));
+    if (updTid) return updTid.slice(0, -3) + '000';
+    return null;
+}
+
 function BatchMergePage() {
     const [baseFolder, setBaseFolder] = useState('');
     const [outputDir, setOutputDir] = useState('');
@@ -1550,6 +1592,16 @@ function BatchMergePage() {
             let outputFiles: api.DirEntryInfo[] = [];
             try { outputFiles = await api.listDir(outputDir); } catch { /* empty output dir */ }
 
+            // Parse all switch files in the output dir into structured objects
+            const parsedOutputs = outputFiles
+                .filter(f => {
+                    if (f.isDirectory) return false;
+                    const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
+                    return SWITCH_EXTS.has(ext);
+                })
+                .map(f => parseMergeOutputFilename(f.name))
+                .filter((p): p is ParsedMergeOutput => p !== null);
+
             const discovered: BatchGame[] = [];
             for (const sub of subfolders) {
                 if (!sub.name) continue;
@@ -1563,21 +1615,29 @@ function BatchMergePage() {
                 });
                 if (switchFiles.length === 0) continue;
 
-                const normName = normalizeForMatch(sub.name);
-                const alreadyExists = normName.length >= 3 && outputFiles.some(f => {
-                    if (f.isDirectory) return false;
-                    const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
-                    if (!SWITCH_EXTS.has(ext)) return false;
-                    const base = f.name.substring(0, f.name.lastIndexOf('.'));
-                    return normalizeForMatch(base).includes(normName);
-                });
+                const filePaths = switchFiles.map(f => f.path);
+
+                // Prefer title ID match (most accurate — avoids substring confusion like
+                // "Bayonetta" matching a "Bayonetta 2" output). Fall back to exact
+                // normalized game name comparison (=== not includes).
+                let matchedOutput: ParsedMergeOutput | undefined;
+                const baseTid = extractBaseTitleId(filePaths);
+                if (baseTid) {
+                    matchedOutput = parsedOutputs.find(o => o.titleId === baseTid);
+                }
+                if (!matchedOutput) {
+                    const normName = normalizeForMatch(sub.name);
+                    if (normName.length >= 3) {
+                        matchedOutput = parsedOutputs.find(o => normalizeForMatch(o.gameName) === normName);
+                    }
+                }
 
                 discovered.push({
                     name: sub.name,
                     path: sub.path,
-                    files: switchFiles.map(f => f.path),
-                    status: alreadyExists ? 'skipped' : 'pending',
-                    message: alreadyExists ? 'Output already found in output folder' : undefined,
+                    files: filePaths,
+                    status: matchedOutput ? 'skipped' : 'pending',
+                    outputFile: matchedOutput?.filename,
                 });
             }
             setGames(discovered);
