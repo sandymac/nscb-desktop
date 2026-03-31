@@ -1497,19 +1497,22 @@ interface ParsedMergeOutput {
     gameName: string;
     titleId: string;   // uppercase 16-hex
     version: string;
+    dlcCount: number;  // number of DLC packs included in the merge (from summary)
 }
 
 function parseMergeOutputFilename(filename: string): ParsedMergeOutput | null {
     const lastDot = filename.lastIndexOf('.');
     if (lastDot === -1) return null;
     const base = filename.substring(0, lastDot);
-    const m = base.match(/^(.+?)\s+\[([0-9A-Fa-f]{16})\]\s+\[v(\d+)\](?:\s+\([^)]+\))?$/i);
+    const m = base.match(/^(.+?)\s+\[([0-9A-Fa-f]{16})\]\s+\[v(\d+)\](?:\s+\(([^)]+)\))?$/i);
     if (!m) return null;
+    const dlcMatch = (m[4] ?? '').match(/(\d+)D/i);
     return {
         filename,
         gameName: m[1],
         titleId: m[2].toUpperCase(),
         version: m[3],
+        dlcCount: dlcMatch ? parseInt(dlcMatch[1]) : 0,
     };
 }
 
@@ -1529,6 +1532,23 @@ function extractBaseTitleIds(filePaths: string[]): Set<string> {
         }
     }
     return baseTids;
+}
+
+// Count distinct DLC title IDs in the input file names.
+// DLC TIDs end in 001–7FF (base = 000, update = 800).
+// Used to detect stale outputs where new DLC was added without a version bump.
+function countDlcFiles(filePaths: string[]): number {
+    const tidRe = /[\[-]([0-9A-Fa-f]{16})[\]-]/gi;
+    const dlcTids = new Set<string>();
+    for (const fp of filePaths) {
+        const fname = fp.replace(/\\/g, '/').split('/').pop() ?? '';
+        for (const m of fname.matchAll(tidRe)) {
+            const tid = m[1].toUpperCase();
+            const suffix = tid.slice(-3);
+            if (suffix !== '000' && suffix !== '800') dlcTids.add(tid);
+        }
+    }
+    return dlcTids.size;
 }
 
 // Extract the highest version number found across all input file names.
@@ -1635,11 +1655,18 @@ function BatchMergePage() {
                 // Prefer title ID match — most accurate, handles multi-game collections
                 // (e.g. a folder with Guacamelee 1 & 2 files matches an output named
                 // after either game) and avoids name ambiguity entirely.
+                // Pick the highest-version candidate — the output dir may contain both
+                // an old and a new merged file for the same game.
                 let matchedOutput: ParsedMergeOutput | undefined;
                 let tidMatchStale = false;
                 const baseTids = extractBaseTitleIds(filePaths);
                 if (baseTids.size > 0) {
-                    matchedOutput = parsedOutputs.find(o => baseTids.has(o.titleId));
+                    const candidates = parsedOutputs.filter(o => baseTids.has(o.titleId));
+                    if (candidates.length > 0) {
+                        matchedOutput = candidates.reduce((best, o) =>
+                            parseInt(o.version) > parseInt(best.version) ? o : best
+                        );
+                    }
                 }
                 // Staleness check: if the matched output's version is lower than the
                 // latest version found in the input files, the output is out of date.
@@ -1648,7 +1675,8 @@ function BatchMergePage() {
                 // stale output (name matching would otherwise find it again by folder name).
                 if (matchedOutput) {
                     const inputVer = extractLatestVersion(filePaths);
-                    if (inputVer > parseInt(matchedOutput.version)) {
+                    const inputDlc = countDlcFiles(filePaths);
+                    if (inputVer > parseInt(matchedOutput.version) || inputDlc > matchedOutput.dlcCount) {
                         matchedOutput = undefined;
                         tidMatchStale = true;
                     }
