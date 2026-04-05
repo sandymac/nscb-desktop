@@ -1,6 +1,6 @@
 # NSCB Desktop
 
-Modern desktop GUI for Nintendo Switch game file operations: compress, decompress, merge, convert, split, repack, and rename (NSP, XCI, NSZ, XCZ, NCZ).
+Modern desktop GUI for Nintendo Switch game file operations: compress, decompress, merge, convert, split, repack, rename, and verify (NSP, XCI, NSZ, XCZ, NCZ).
 
 Built with Tauri v2 + React + Vite. Powered by [nscb_rust](https://github.com/cxfcxf/nscb_rust).
 
@@ -15,10 +15,11 @@ Built with Tauri v2 + React + Vite. Powered by [nscb_rust](https://github.com/cx
 - Create/Repack NSP from split folders
 - Rename files using embedded metadata + NUTDB lookup (with rename mode, language, version, DLC controls)
 - NUTDB utilities: refresh cache, look up title IDs
+- Verify container integrity (NSP, NSX, NSZ, XCI, XCZ) at three levels: decryption (lv1), signature (lv2), or full (lv3)
 - View file info (content details and metadata summary)
 - Drag & drop files or folders (rename supports recursive folder input)
 - Live output console + progress tracking
-- Batch support for compress/decompress/convert/split/rename
+- Batch support for compress/decompress/convert/split/rename/verify
 - Dark theme UI with SVG iconography and file type badges
 - Auto-download nscb_rust backend from GitHub releases, or import manually
 - Proxy support for NUTDB downloads (URL prefix proxy for users behind firewalls)

@@ -41,6 +41,7 @@ const Icons = {
     switchLogo: icon(28, <><rect x="2" y="3" width="20" height="18" rx="3" ry="3" /><line x1="12" y1="3" x2="12" y2="21" /><circle cx="7.5" cy="9" r="2" /><circle cx="16.5" cy="15" r="1.5" /></>, 1.5),
     info: icon(16, <><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></>),
     batchMerge: icon(20, <><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></>),
+    verify: icon(20, <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><polyline points="9 12 11 14 15 10" /></>),
 };
 
 // ============================================================
@@ -191,6 +192,7 @@ const NAV_PAGES = [
     { id: 'info', icon: Icons.info, label: 'Info' },
     { id: 'rename', icon: Icons.rename, label: 'Rename' },
     { id: 'batchmerge', icon: Icons.batchMerge, label: 'Batch Merge' },
+    { id: 'verify', icon: Icons.verify, label: 'Verify' },
     { id: 'settings', icon: Icons.settings, label: 'Settings' },
 ];
 
@@ -1407,6 +1409,86 @@ function SetupPage({
     );
 }
 
+function VerifyPage() {
+    const { files, addFiles, removeFile, clearFiles } = useFileList();
+    const { running, progress, outputLines, setRunning, setProgress, setOutputLines } = useRunnerEvents('verify');
+    const [vertype, setVertype] = useState('lv1');
+
+    const handleStart = async () => {
+        if (files.length === 0) return;
+        setRunning(true);
+        setProgress({ ...EMPTY_PROGRESS, message: 'Verifying...' });
+        setOutputLines([]);
+        await runner.run('verify', files, { vertype });
+    };
+
+    const handleCancel = async () => {
+        await runner.cancel();
+        setRunning(false);
+        setProgress({ ...EMPTY_PROGRESS, message: 'Cancelled' });
+    };
+
+    const handleClear = () => {
+        clearFiles();
+        setOutputLines([]);
+        setProgress(EMPTY_PROGRESS);
+    };
+
+    const vertypeDescriptions: Record<string, string> = {
+        lv1: 'Decryption test only — checks that NCA content can be decrypted with current keys',
+        lv2: 'Signature verification — validates NCA signatures',
+        lv3: 'Full verification — decryption + signature + hash check',
+    };
+
+    return (
+        <div className="page">
+            <div className="page-header">
+                <div className="page-icon accent-verify">{Icons.verify}</div>
+                <div>
+                    <h2>Verify</h2>
+                    <p>Verify integrity of NSP/XCI/NSZ/XCZ container files</p>
+                </div>
+            </div>
+
+            <DropZone onFiles={addFiles} accept={['nsp', 'nsx', 'nsz', 'xci', 'xcz']} hint="Drop NSP, NSX, NSZ, XCI, or XCZ files to verify" />
+            <FileList files={files} onRemove={removeFile} />
+
+            {files.length > 0 && (
+                <>
+                    <div className="card">
+                        <div className="card-header">
+                            <span className="card-title">Verification Level</span>
+                        </div>
+                        <div className="options-panel">
+                            <div className="option-group">
+                                <label className="option-label">Mode</label>
+                                <select value={vertype} onChange={(e) => setVertype(e.target.value)}>
+                                    <option value="lv1">Decryption (lv1)</option>
+                                    <option value="lv2">Signature (lv2)</option>
+                                    <option value="lv3">Full (lv3)</option>
+                                </select>
+                                <span className="option-description">{vertypeDescriptions[vertype]}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {(running || outputLines.length > 0) && (
+                        <ProgressDisplay progress={progress} outputLines={outputLines} />
+                    )}
+
+                    <ActionBar
+                        running={running}
+                        onCancel={handleCancel}
+                        onClear={handleClear}
+                        onStart={handleStart}
+                        startLabel="Verify"
+                    />
+                </>
+            )}
+        </div>
+    );
+}
+
 function BatchMergePage() {
     const [baseFolder, setBaseFolder] = useState('');
     const [outputDir, setOutputDir] = useState('');
@@ -1788,6 +1870,7 @@ const PAGES: Record<string, React.FC> = {
     info: InfoPage,
     rename: RenamePage,
     batchmerge: BatchMergePage,
+    verify: VerifyPage,
 };
 
 async function checkSetupState() {

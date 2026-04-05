@@ -30,7 +30,7 @@ describe('getDirname', () => {
 
 describe('SINGLE_FILE_OPS', () => {
     it.each([
-        'compress', 'decompress', 'convert', 'split', 'dspl', 'info', 'renamef',
+        'compress', 'decompress', 'convert', 'split', 'dspl', 'info', 'renamef', 'verify',
     ])('includes %s', (op) => {
         expect(SINGLE_FILE_OPS.has(op)).toBe(true);
     });
@@ -381,5 +381,42 @@ describe('batching (SINGLE_FILE_OPS)', () => {
         const batches = SINGLE_FILE_OPS.has('merge') ? files.map(f => [f]) : [files];
         expect(batches).toHaveLength(1);
         expect(batches[0]).toHaveLength(3);
+    });
+});
+
+// ─── Verify tab ─────────────────────────────────────────────────
+
+describe('verify', () => {
+    it('is in SINGLE_FILE_OPS', () => {
+        expect(SINGLE_FILE_OPS.has('verify')).toBe(true);
+    });
+
+    it('filelist mode with vertype lv1', () => {
+        expect(buildArgs('verify', ['H:/game.nsp'], { vertype: 'lv1', filelistPath: 'C:/tools/game-vflist.txt' }, KEYS)).toEqual([
+            '--verify', 'all', '--text_file', 'C:/tools/game-vflist.txt',
+            '--vertype', 'lv1',
+            '--keys', KEYS,
+        ]);
+    });
+
+    it('filelist mode with vertype lv2', () => {
+        expect(buildArgs('verify', ['H:/game.xci'], { vertype: 'lv2', filelistPath: 'C:/tools/game-vflist.txt' }, KEYS)).toEqual([
+            '--verify', 'all', '--text_file', 'C:/tools/game-vflist.txt',
+            '--vertype', 'lv2',
+            '--keys', KEYS,
+        ]);
+    });
+
+    it('filelist mode with vertype lv3', () => {
+        expect(buildArgs('verify', ['H:/game.nsz'], { vertype: 'lv3', filelistPath: 'C:/tools/game-vflist.txt' }, KEYS)).toEqual([
+            '--verify', 'all', '--text_file', 'C:/tools/game-vflist.txt',
+            '--vertype', 'lv3',
+            '--keys', KEYS,
+        ]);
+    });
+
+    it('no -o flag is added for verify', () => {
+        const args = buildArgs('verify', ['H:/game.nsp'], { vertype: 'lv1', filelistPath: 'C:/tools/game-vflist.txt' }, KEYS);
+        expect(args).not.toContain('-o');
     });
 });

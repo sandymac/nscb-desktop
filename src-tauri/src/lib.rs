@@ -304,6 +304,35 @@ fn download_backend(app: tauri::AppHandle, url: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn create_verify_filelist(app: tauri::AppHandle, target_path: String) -> Result<String, String> {
+    let tools_dir = app_tools_dir(&app)?;
+    let stem = std::path::Path::new(&target_path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("verify");
+    let safe_stem: String = stem.chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .collect();
+    let list_name = format!("{}-vflist.txt", safe_stem);
+    let list_path = tools_dir.join(&list_name);
+
+    // Always delete the cached result so the backend runs fresh
+    let cached = tools_dir.join("INFO").join("MASSVERIFY")
+        .join(format!("{}-vflist-verify.txt", safe_stem));
+    let _ = std::fs::remove_file(&cached);
+
+    std::fs::write(&list_path, format!("{}\n", target_path))
+        .map_err(|e| format!("Failed to create verify filelist: {e}"))?;
+    Ok(list_path.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+fn read_file_text(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read file: {e}"))
+}
+
+#[tauri::command]
 fn cancel_nscb() -> Result<(), String> {
     let pid_opt = {
         let mut lock = running_pid()
@@ -404,6 +433,8 @@ pub fn run() {
             download_backend,
             run_nscb,
             cancel_nscb,
+            create_verify_filelist,
+            read_file_text,
             get_platform,
             get_setting,
             save_setting

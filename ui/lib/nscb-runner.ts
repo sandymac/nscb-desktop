@@ -34,7 +34,7 @@ class Emitter {
     }
 }
 
-export const SINGLE_FILE_OPS = new Set(['compress', 'decompress', 'convert', 'split', 'dspl', 'info', 'renamef']);
+export const SINGLE_FILE_OPS = new Set(['compress', 'decompress', 'convert', 'split', 'dspl', 'info', 'renamef', 'verify']);
 
 export function getBasename(filePath: string): string {
     const parts = filePath.replace(/\\/g, '/').split('/');
@@ -105,9 +105,17 @@ export function buildArgs(operation: string, files: string[], options: Record<st
         case 'nutdb-lookup':
             args.push('--nutdb-lookup', options.titleId);
             break;
+        case 'verify':
+            if (options.filelistPath) {
+                args.push('--verify', 'all', '--text_file', options.filelistPath);
+            } else {
+                args.push('--verify', ...files);
+            }
+            if (options.vertype) args.push('--vertype', options.vertype);
+            break;
     }
 
-    if (operation !== 'create' && operation !== 'info' && operation !== 'renamef' && operation !== 'nutdb-refresh' && operation !== 'nutdb-lookup') {
+    if (operation !== 'create' && operation !== 'info' && operation !== 'renamef' && operation !== 'nutdb-refresh' && operation !== 'nutdb-lookup' && operation !== 'verify') {
         if (options.output) {
             args.push('-o', options.output);
         } else if (files.length > 0) {
@@ -224,6 +232,12 @@ export class NscbRunner extends Emitter {
         return buildArgs(operation, files, options, keysPath);
     }
 
+    private computeVerifyOutputPath(filelistPath: string): string {
+        const dir = getDirname(filelistPath);
+        const base = getBasename(filelistPath).replace(/\.txt$/i, '');
+        return `${dir}/INFO/MASSVERIFY/${base}-verify.txt`;
+    }
+
     private async startBackendRun(operation: string, args: string[]): Promise<number> {
         return await new Promise<number>(async (resolve) => {
             this.doneResolver = resolve;
@@ -266,12 +280,35 @@ export class NscbRunner extends Emitter {
                 });
             }
 
-            const args = await this.buildArgs(operation, currentFiles, options);
+            // For verify: use filelist mode (non-interactive)
+            let runOptions = options;
+            let verifyOutputPath: string | null = null;
+            if (operation === 'verify') {
+                const filelistPath = await invoke<string>('create_verify_filelist', { targetPath: currentFiles[0] });
+                verifyOutputPath = this.computeVerifyOutputPath(filelistPath);
+                runOptions = { ...options, filelistPath };
+            }
+
+            const args = await this.buildArgs(operation, currentFiles, runOptions);
             this.lastOutputLine = '';
             this.emit('log', `Running: nscb_rust ${args.join(' ')}`);
             this.emit('output', { op: operation, line: `> nscb_rust ${args.join(' ')}` });
 
             const code = await this.startBackendRun(operation, args);
+
+            // After verify completes, read and emit the result file
+            if (operation === 'verify' && verifyOutputPath) {
+                try {
+                    const content = await invoke<string>('read_file_text', { path: verifyOutputPath });
+                    content.split('\n').forEach(line => {
+                        const trimmed = line.trim();
+                        if (trimmed) this.emit('output', { op: operation, line: trimmed });
+                    });
+                } catch {
+                    // result file may not exist if verify failed early
+                }
+            }
+
             if (code !== 0) {
                 this.currentOperation = null;
                 this.emit('nscb-error', {

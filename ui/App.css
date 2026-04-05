@@ -32,6 +32,7 @@
   --color-rename: #ffa657;
   --color-settings: #8b949e;
   --color-batchmerge: #56d8a4;
+  --color-verify: #63e6be;
 
   /* Text colors */
   --text-primary: #e6edf3;
@@ -297,6 +298,7 @@ body {
 .page-icon.accent-rename { background: rgba(255, 166, 87, 0.12); color: var(--color-rename); }
 .page-icon.accent-settings { background: rgba(139, 148, 158, 0.12); color: var(--color-settings); }
 .page-icon.accent-batchmerge { background: rgba(86, 216, 164, 0.12); color: var(--color-batchmerge); }
+.page-icon.accent-verify { background: rgba(99, 230, 190, 0.12); color: var(--color-verify); }
 
 .page-header h2 {
   font-size: var(--font-size-2xl);
