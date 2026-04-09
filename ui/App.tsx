@@ -1544,8 +1544,8 @@ function countDlcFiles(filePaths: string[]): number {
         const fname = fp.replace(/\\/g, '/').split('/').pop() ?? '';
         for (const m of fname.matchAll(tidRe)) {
             const tid = m[1].toUpperCase();
-            const suffix = tid.slice(-3);
-            if (suffix !== '000' && suffix !== '800') dlcTids.add(tid);
+            const suffixValue = parseInt(tid.slice(-3), 16);
+            if (suffixValue >= 0x001 && suffixValue <= 0x7FF) dlcTids.add(tid);
         }
     }
     return dlcTids.size;
@@ -1692,7 +1692,7 @@ function BatchMergePage() {
                 if (!matchedOutput && !tidMatchStale) {
                     const normName = normalizeForMatch(sub.name);
                     if (normName.length >= 3) {
-                        matchedOutput = parsedOutputs.find(o => {
+                        const nameCandidates = parsedOutputs.filter(o => {
                             const n = normalizeForMatch(o.gameName);
                             if (n === normName) return true;
                             if (n.endsWith(normName)) return true;
@@ -1702,6 +1702,17 @@ function BatchMergePage() {
                             }
                             return false;
                         });
+                        if (nameCandidates.length > 0) {
+                            matchedOutput = nameCandidates.reduce((best, o) =>
+                                parseInt(o.version) > parseInt(best.version) ? o : best
+                            );
+                            // Apply the same staleness check as the TID path.
+                            const inputVer = extractLatestVersion(filePaths);
+                            const inputDlc = countDlcFiles(filePaths);
+                            if (inputVer > parseInt(matchedOutput.version) || inputDlc > matchedOutput.dlcCount) {
+                                matchedOutput = undefined;
+                            }
+                        }
                     }
                 }
 
